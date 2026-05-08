@@ -18,6 +18,21 @@
   </style>
 </head>
 <body>
+  <div id="errbox" style="display:none;position:fixed;inset:0;padding:20px;color:#fff;background:#400;font-family:monospace;font-size:12px;white-space:pre-wrap;overflow:auto;z-index:9999;"></div>
+  <script>
+    window.addEventListener('error', function(e) {
+      var box = document.getElementById('errbox');
+      if (!box) return;
+      box.style.display = 'block';
+      box.textContent = 'ERROR: ' + e.message + '\n\nFile: ' + (e.filename || '?') + '\nLine: ' + (e.lineno || '?') + '\n\n' + (e.error && e.error.stack ? e.error.stack : '');
+    });
+    window.addEventListener('unhandledrejection', function(e) {
+      var box = document.getElementById('errbox');
+      if (!box) return;
+      box.style.display = 'block';
+      box.textContent = 'PROMISE ERROR: ' + (e.reason && e.reason.message ? e.reason.message : e.reason) + '\n\n' + (e.reason && e.reason.stack ? e.reason.stack : '');
+    });
+  </script>
   <div id="root"></div>
   <div id="loader"><div class="spinner"></div><div>Loading...</div></div>
 
@@ -1737,3 +1752,4 @@ createRoot(document.getElementById('root')).render(<App />);
   </script>
 </body>
 </html>
+
