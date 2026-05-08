@@ -675,7 +675,7 @@ function Header({ title, subtitle, onBack }) {
 // MAIN APP
 // ====================
 
-export default function App() {
+function App() {
   const [screen, setScreen] = useState('title');
   const [mode, setMode] = useState(null);
   const [digits, setDigits] = useState(3);
@@ -1752,4 +1752,3 @@ createRoot(document.getElementById('root')).render(<App />);
   </script>
 </body>
 </html>
-
