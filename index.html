@@ -96,7 +96,7 @@
 // ====================
 
 const POLL_INTERVAL = 2000;
-const STORAGE_PREFIX = 'numbattle:';
+const STORAGE_PREFIX = 'games/';
 const ROOM_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const ROOM_LEN = 4;
 
@@ -156,11 +156,21 @@ function genRoomCode() {
 }
 
 async function storageGet(key) {
-  if (!window._db) return null;
+  if (!window._db) {
+    console.warn('Firebase not initialized');
+    return null;
+  }
   try {
     const snap = await window._db.ref(key).once('value');
-    return snap.exists() ? normalizeState(snap.val()) : null;
-  } catch (e) { console.error(e); return null; }
+    if (!snap.exists()) {
+      console.warn('Storage key not found:', key);
+      return null;
+    }
+    return normalizeState(snap.val());
+  } catch (e) {
+    console.error('storageGet error for key', key, ':', e);
+    throw e;
+  }
 }
 
 // Firebase doesn't store null values, so strip them before write
@@ -946,8 +956,15 @@ function App() {
             error={remoteError} setError={setRemoteError}
             onSubmit={(code) => {
               (async () => {
-                const s = await storageGet(STORAGE_PREFIX + code);
-                if (!s) { setRemoteError('ルームが見つかりません'); buzz([20, 40, 20]); return; }
+                let s;
+                try {
+                  s = await storageGet(STORAGE_PREFIX + code);
+                } catch (err) {
+                  setRemoteError('Firebase エラー: ' + (err.message || err));
+                  buzz([20, 40, 20]);
+                  return;
+                }
+                if (!s) { setRemoteError(`ルーム ${code} が見つかりません`); buzz([20, 40, 20]); return; }
                 if (s.p2Joined) { setRemoteError('このルームは満員です'); buzz([20, 40, 20]); return; }
                 const updated = { ...s, p2Joined: true, ts: Date.now() };
                 await storageSet(STORAGE_PREFIX + code, updated);
