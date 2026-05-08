@@ -5,6 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#0a0a0a" />
   <title>ヒット&ブロー - Number Battle</title>
+  <link rel="manifest" href="manifest.json" />
+  <link rel="icon" type="image/png" href="icon-192.png" />
+  <link rel="apple-touch-icon" href="icon-192.png" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="ヒット&ブロー" />
+  <meta name="mobile-web-app-capable" content="yes" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=DotGothic16&family=Zen+Kaku+Gothic+New:wght@400;700;900&display=swap" rel="stylesheet" />
@@ -996,7 +1003,7 @@ function App() {
 function TitleScreen({ onPick }) {
   return (
     <div className="flex flex-col min-h-[calc(100vh-3rem)]">
-      <div className="flex-1 flex flex-col items-center justify-center text-center pt-8 pb-10">
+      <div className="flex-1 flex flex-col items-center justify-center text-center pt-8 pb-5">
         <div className="mb-2 text-pink-400 text-xs font-bold tracking-[0.3em] anim-wiggle inline-block">★ NUMBER BATTLE ★</div>
         <h1
           className="text-5xl font-black mb-3 leading-none title-rainbow"
@@ -1749,6 +1756,15 @@ createRoot(document.getElementById('root')).render(<App />);
     const hideLoader = () => { const l = document.getElementById('loader'); if (l) l.style.display = 'none'; };
     setTimeout(hideLoader, 100);
     setTimeout(hideLoader, 1500);
+  </script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function() {
+        navigator.serviceWorker.register('sw.js').catch(function(err) {
+          console.warn('SW register failed:', err);
+        });
+      });
+    }
   </script>
 </body>
 </html>
