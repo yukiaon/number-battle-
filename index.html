@@ -159,14 +159,42 @@ async function storageGet(key) {
   if (!window._db) return null;
   try {
     const snap = await window._db.ref(key).once('value');
-    return snap.exists() ? snap.val() : null;
+    return snap.exists() ? normalizeState(snap.val()) : null;
   } catch (e) { console.error(e); return null; }
+}
+
+// Firebase doesn't store null values, so strip them before write
+function sanitizeForFirebase(obj) {
+  if (obj === null || obj === undefined) return undefined;
+  if (Array.isArray(obj)) return obj.map(sanitizeForFirebase);
+  if (typeof obj === 'object') {
+    const out = {};
+    for (const k in obj) {
+      const v = sanitizeForFirebase(obj[k]);
+      if (v !== undefined) out[k] = v;
+    }
+    return out;
+  }
+  return obj;
+}
+
+// Normalize state read from Firebase: ensure turns is an array
+function normalizeState(s) {
+  if (!s) return s;
+  let turns = s.turns;
+  if (!turns) turns = [];
+  // Firebase sometimes returns arrays as objects with numeric keys
+  if (!Array.isArray(turns)) {
+    turns = Object.keys(turns).sort((a, b) => Number(a) - Number(b)).map(k => turns[k] || {});
+  }
+  turns = turns.map(t => t || {});
+  return { ...s, turns };
 }
 
 async function storageSet(key, val) {
   if (!window._db) return false;
   try {
-    await window._db.ref(key).set(val);
+    await window._db.ref(key).set(sanitizeForFirebase(val));
     return true;
   } catch (e) { console.error(e); return false; }
 }
@@ -725,7 +753,7 @@ function App() {
     if (mode !== 'remote' || !roomCode || !window._db) return;
     const ref = window._db.ref(STORAGE_PREFIX + roomCode);
     const handler = ref.on('value', (snap) => {
-      if (snap.exists()) setRemoteState(snap.val());
+      if (snap.exists()) setRemoteState(normalizeState(snap.val()));
     });
     return () => ref.off('value', handler);
   }, [mode, roomCode]);
@@ -779,7 +807,7 @@ function App() {
       return { ...state, winner: 'draw' };
     }
     if (last.p1Guess && last.p2Guess && last.p1Feedback && last.p2Feedback) {
-      return { ...state, turns: [...turns, { p1Guess: null, p1Feedback: null, p2Guess: null, p2Feedback: null }], currentPlayer: 'p1' };
+      return { ...state, turns: [...turns, { _t: 1, p1Guess: null, p1Feedback: null, p2Guess: null, p2Feedback: null }], currentPlayer: 'p1' };
     }
     return state;
   }
@@ -834,7 +862,7 @@ function App() {
             reveal={reveal} setReveal={setReveal}
             onBack={() => { resetAll(); setScreen('title'); }}
             onConfirm={() => {
-              setGame(g => ({ ...g, p1Secret: input, turns: [{ p1Guess: null, p1Feedback: null, p2Guess: null, p2Feedback: null }] }));
+              setGame(g => ({ ...g, p1Secret: input, turns: [{ _t: 1, p1Guess: null, p1Feedback: null, p2Guess: null, p2Feedback: null }] }));
               setInput('');
               setScreen('cpu_game');
             }}
@@ -894,7 +922,7 @@ function App() {
                 digits, maxTurns,
                 p1Joined: true, p2Joined: false,
                 p1Ready: false, p2Ready: false,
-                turns: [{ p1Guess: null, p1Feedback: null, p2Guess: null, p2Feedback: null }],
+                turns: [{ _t: 1, p1Guess: null, p1Feedback: null, p2Guess: null, p2Feedback: null }],
                 currentPlayer: 'p1',
                 winner: null,
                 ts: Date.now(),
@@ -1237,7 +1265,7 @@ function CpuGameScreen({ game, setGame, cpuPoss, setCpuPoss, input, setInput, on
       if (p2S > p1S) return { ...g, winner: 'p2' };
       return { ...g, winner: 'draw' };
     }
-    return { ...g, turns: [...turns, { p1Guess: null, p1Feedback: null, p2Guess: null, p2Feedback: null }] };
+    return { ...g, turns: [...turns, { _t: 1, p1Guess: null, p1Feedback: null, p2Guess: null, p2Feedback: null }] };
   }
 
   const myGuesses = turns.filter(t => t.p1Guess).map(t => ({ value: t.p1Guess, fb: t.p1Feedback }));
@@ -1318,7 +1346,7 @@ function LocalSetupScreen({ phase, setPhase, digits, input, setInput, game, setG
         reveal={reveal} setReveal={setReveal}
         onBack={onBack}
         onConfirm={() => {
-          setGame(g => ({ ...g, p2Secret: input, turns: [{ p1Guess: null, p1Feedback: null, p2Guess: null, p2Feedback: null }] }));
+          setGame(g => ({ ...g, p2Secret: input, turns: [{ _t: 1, p1Guess: null, p1Feedback: null, p2Guess: null, p2Feedback: null }] }));
           setInput(''); setReveal(false);
           onStartGame();
         }}
@@ -1397,7 +1425,7 @@ function LocalGameScreen({ game, setGame, input, setInput, onBack, onEnd, onStri
       if (p2S > p1S) return { ...g, winner: 'p2' };
       return { ...g, winner: 'draw' };
     }
-    return { ...g, turns: [...turns, { p1Guess: null, p1Feedback: null, p2Guess: null, p2Feedback: null }] };
+    return { ...g, turns: [...turns, { _t: 1, p1Guess: null, p1Feedback: null, p2Guess: null, p2Feedback: null }] };
   }
 
   const p1G = turns.filter(t => t.p1Guess).map(t => ({ value: t.p1Guess, fb: t.p1Feedback }));
@@ -1560,7 +1588,14 @@ function RemoteWaitingJoinScreen({ roomCode, joined, copied, setCopied, digits, 
 }
 
 function RemoteGameScreen({ roomCode, role, mySecret, state, input, setInput, onBack, onEnd, onStrike }) {
-  const { digits, maxTurns, turns, winner, p1Ready, p2Ready } = state;
+  // Defensive parsing: tolerate any missing fields from Firebase
+  const safe = state || {};
+  const digits = safe.digits || 3;
+  const maxTurns = safe.maxTurns || 0;
+  const winner = safe.winner;
+  const p1Ready = !!safe.p1Ready;
+  const p2Ready = !!safe.p2Ready;
+  const turns = Array.isArray(safe.turns) ? safe.turns : [];
   const oppRole = role === 'p1' ? 'p2' : 'p1';
   const oppReady = oppRole === 'p1' ? p1Ready : p2Ready;
   const lastTurn = turns[turns.length - 1] || {};
