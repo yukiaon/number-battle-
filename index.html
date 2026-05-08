@@ -1,0 +1,1739 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0a0a0a" />
+  <title>ヒット&ブロー - Number Battle</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DotGothic16&family=Zen+Kaku+Gothic+New:wght@400;700;900&display=swap" rel="stylesheet" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    html, body { margin: 0; padding: 0; background: #0a0a0a; overscroll-behavior: none; }
+    body { font-family: 'Zen Kaku Gothic New', system-ui, sans-serif; }
+    #loader { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #aaa; gap: 12px; }
+    .spinner { width: 32px; height: 32px; border: 3px solid #333; border-top-color: #ec4899; border-radius: 50%; animation: spin 0.8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <div id="loader"><div class="spinner"></div><div>Loading...</div></div>
+
+  <!-- Firebase (compat for easy global access) -->
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+
+  <!-- React & Babel -->
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <!-- Firebase config: REPLACE WITH YOUR OWN! See README.md -->
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyAGadB085HJ8QxUaOt6g_XMrIJybJu84X8",
+      authDomain: "number-battle-57a79.firebaseapp.com",
+      databaseURL: "https://number-battle-57a79-default-rtdb.asia-southeast1.firebasedatabase.app",
+      projectId: "number-battle-57a79",
+      storageBucket: "number-battle-57a79.firebasestorage.app",
+      messagingSenderId: "215310501383",
+      appId: "1:215310501383:web:d76e297230d1aa1ebf0ca2",
+      measurementId: "G-BFRZFXQ1YY",
+    };
+    try {
+      if (firebaseConfig.apiKey !== "REPLACE_ME") {
+        firebase.initializeApp(firebaseConfig);
+        window._db = firebase.database();
+      }
+    } catch (e) { console.error('Firebase init failed:', e); }
+  </script>
+
+  <script type="text/babel" data-presets="react">
+    const { useState, useEffect, useRef, useMemo } = React;
+
+    // ===== Lucide icons (inline SVG replacements) =====
+    const Icon = ({ size = 24, children, ...props }) => (
+      <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>{children}</svg>
+    );
+    const ArrowLeft = (p) => <Icon {...p}><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></Icon>;
+    const Cpu = (p) => <Icon {...p}><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M15 2v2"/><path d="M15 20v2"/><path d="M2 15h2"/><path d="M2 9h2"/><path d="M20 15h2"/><path d="M20 9h2"/><path d="M9 2v2"/><path d="M9 20v2"/></Icon>;
+    const Users = (p) => <Icon {...p}><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></Icon>;
+    const Wifi = (p) => <Icon {...p}><path d="M12 20h.01"/><path d="M2 8.82a15 15 0 0 1 20 0"/><path d="M5 12.859a10 10 0 0 1 14 0"/><path d="M8.5 16.429a5 5 0 0 1 7 0"/></Icon>;
+    const Copy = (p) => <Icon {...p}><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></Icon>;
+    const Check = (p) => <Icon {...p}><path d="M20 6 9 17l-5-5"/></Icon>;
+    const Sparkles = (p) => <Icon {...p}><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/><path d="M20 3v4"/><path d="M22 5h-4"/><path d="M4 17v2"/><path d="M5 18H3"/></Icon>;
+    const RefreshCw = (p) => <Icon {...p}><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M3 21v-5h5"/></Icon>;
+    const Eye = (p) => <Icon {...p}><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/><circle cx="12" cy="12" r="3"/></Icon>;
+    const EyeOff = (p) => <Icon {...p}><path d="M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49"/><path d="M14.084 14.158a3 3 0 0 1-4.242-4.242"/><path d="M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143"/><path d="m2 2 20 20"/></Icon>;
+
+    
+// ====================
+// CONSTANTS & HELPERS
+// ====================
+
+const POLL_INTERVAL = 2000;
+const STORAGE_PREFIX = 'numbattle:';
+const ROOM_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+const ROOM_LEN = 4;
+
+function calcResult(guess, target) {
+  let s = 0, b = 0;
+  for (let i = 0; i < guess.length; i++) {
+    if (guess[i] === target[i]) s++;
+    else if (target.indexOf(guess[i]) !== -1) b++;
+  }
+  return { s, b };
+}
+
+function isValidNum(n, digits) {
+  if (typeof n !== 'string' || n.length !== digits || !/^\d+$/.test(n)) return false;
+  return new Set(n).size === digits;
+}
+
+function genAllValid(digits) {
+  const out = [];
+  const dfs = (cur, used) => {
+    if (cur.length === digits) { out.push(cur); return; }
+    for (let d = 0; d <= 9; d++) {
+      if (!used.has(d)) {
+        used.add(d);
+        dfs(cur + d, used);
+        used.delete(d);
+      }
+    }
+  };
+  dfs('', new Set());
+  return out;
+}
+
+function filterPoss(poss, guess, fb) {
+  return poss.filter(p => {
+    const r = calcResult(guess, p);
+    return r.s === fb.s && r.b === fb.b;
+  });
+}
+
+// Digits confirmed not in opponent's number (from "なし" feedback)
+function computeEliminated(guesses) {
+  const set = new Set();
+  for (const g of guesses) {
+    if (g && g.fb && g.fb.s === 0 && g.fb.b === 0 && g.value) {
+      for (const d of g.value) set.add(d);
+    }
+  }
+  return set;
+}
+
+function genRoomCode() {
+  let c = '';
+  for (let i = 0; i < ROOM_LEN; i++)
+    c += ROOM_CHARS[Math.floor(Math.random() * ROOM_CHARS.length)];
+  return c;
+}
+
+async function storageGet(key) {
+  if (!window._db) return null;
+  try {
+    const snap = await window._db.ref(key).once('value');
+    return snap.exists() ? snap.val() : null;
+  } catch (e) { console.error(e); return null; }
+}
+
+async function storageSet(key, val) {
+  if (!window._db) return false;
+  try {
+    await window._db.ref(key).set(val);
+    return true;
+  } catch (e) { console.error(e); return false; }
+}
+
+// Tactile feedback
+function buzz(pattern = 25) {
+  try { if (navigator.vibrate) navigator.vibrate(pattern); } catch (e) {}
+}
+
+// ====================
+// GLOBAL STYLES (animations)
+// ====================
+
+const GLOBAL_STYLES = `
+  @import url('https://fonts.googleapis.com/css2?family=DotGothic16&family=Zen+Kaku+Gothic+New:wght@400;700;900&display=swap');
+
+  body { font-family: 'Zen Kaku Gothic New', system-ui, sans-serif; }
+
+  @keyframes orb-float-a {
+    0%, 100% { transform: translate(0, 0) scale(1); }
+    33% { transform: translate(60px, -40px) scale(1.15); }
+    66% { transform: translate(-40px, 50px) scale(0.85); }
+  }
+  @keyframes orb-float-b {
+    0%, 100% { transform: translate(0, 0) scale(1); }
+    33% { transform: translate(-50px, 30px) scale(0.9); }
+    66% { transform: translate(40px, -50px) scale(1.2); }
+  }
+  @keyframes orb-float-c {
+    0%, 100% { transform: translate(0, 0) scale(1); }
+    50% { transform: translate(30px, 30px) scale(1.1); }
+  }
+
+  @keyframes title-rainbow {
+    0%   { background-position: 0% 50%; }
+    100% { background-position: 200% 50%; }
+  }
+  @keyframes title-bounce {
+    0%, 100% { transform: translateY(0) rotate(-1deg); }
+    50% { transform: translateY(-6px) rotate(1deg); }
+  }
+
+  @keyframes digit-pop {
+    0% { transform: scale(0) rotate(-180deg); opacity: 0; }
+    60% { transform: scale(1.4) rotate(15deg); opacity: 1; }
+    100% { transform: scale(1) rotate(0); opacity: 1; }
+  }
+  @keyframes slot-glow {
+    0%, 100% { box-shadow: 0 0 20px rgba(236, 72, 153, 0.4); }
+    50% { box-shadow: 0 0 35px rgba(236, 72, 153, 0.9); }
+  }
+
+  @keyframes button-press {
+    0% { transform: scale(1); }
+    40% { transform: scale(0.88); }
+    70% { transform: scale(1.05); }
+    100% { transform: scale(1); }
+  }
+  @keyframes ripple {
+    0% { transform: scale(0); opacity: 0.6; }
+    100% { transform: scale(4); opacity: 0; }
+  }
+
+  @keyframes feedback-pop {
+    0% { transform: scale(0) rotate(180deg); opacity: 0; }
+    60% { transform: scale(1.5) rotate(-15deg); opacity: 1; }
+    100% { transform: scale(1) rotate(0); opacity: 1; }
+  }
+
+  @keyframes guess-row-in {
+    0% { transform: translateX(-20px) scale(0.9); opacity: 0; }
+    100% { transform: translateX(0) scale(1); opacity: 1; }
+  }
+
+  @keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    15% { transform: translateX(-12px); }
+    30% { transform: translateX(12px); }
+    45% { transform: translateX(-9px); }
+    60% { transform: translateX(9px); }
+    75% { transform: translateX(-5px); }
+    90% { transform: translateX(5px); }
+  }
+
+  @keyframes screen-flash {
+    0%, 100% { opacity: 0; }
+    20% { opacity: 1; }
+  }
+
+  @keyframes confetti-fall {
+    0% { transform: translateY(-20vh) rotate(0deg); opacity: 1; }
+    100% { transform: translateY(120vh) rotate(720deg); opacity: 0.9; }
+  }
+
+  @keyframes burst-out {
+    0% { transform: translate(-50%, -50%) rotate(var(--a)) translateX(0) scale(0.5); opacity: 1; }
+    100% { transform: translate(-50%, -50%) rotate(var(--a)) translateX(80px) scale(0); opacity: 0; }
+  }
+
+  @keyframes star-pop {
+    0% { transform: scale(0) rotate(0); opacity: 1; }
+    50% { transform: scale(1.3) rotate(180deg); }
+    100% { transform: scale(2) rotate(360deg); opacity: 0; }
+  }
+
+  @keyframes win-text-in {
+    0% { transform: scale(0) rotate(-360deg); opacity: 0; }
+    60% { transform: scale(1.3) rotate(15deg); opacity: 1; }
+    100% { transform: scale(1) rotate(0); opacity: 1; }
+  }
+
+  @keyframes wiggle {
+    0%, 100% { transform: rotate(-2deg); }
+    50% { transform: rotate(2deg); }
+  }
+
+  @keyframes pulse-glow-pink {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(236, 72, 153, 0.6); }
+    50% { box-shadow: 0 0 30px 10px rgba(236, 72, 153, 0); }
+  }
+
+  @keyframes pulse-glow-cyan {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(34, 211, 238, 0.6); }
+    50% { box-shadow: 0 0 30px 10px rgba(34, 211, 238, 0); }
+  }
+
+  @keyframes float-up {
+    0% { transform: translateY(0); opacity: 1; }
+    100% { transform: translateY(-60px); opacity: 0; }
+  }
+
+  @keyframes turn-pulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.06); }
+  }
+
+  @keyframes bg-grid-move {
+    0% { background-position: 0 0; }
+    100% { background-position: 50px 50px; }
+  }
+
+  .anim-digit-pop { animation: digit-pop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1); }
+  .anim-feedback-pop { animation: feedback-pop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1); }
+  .anim-guess-in { animation: guess-row-in 0.35s cubic-bezier(0.34, 1.56, 0.64, 1); }
+  .anim-button-press { animation: button-press 0.25s ease-out; }
+  .anim-shake { animation: shake 0.6s ease-in-out; }
+  .anim-win-text { animation: win-text-in 0.7s cubic-bezier(0.34, 1.56, 0.64, 1); }
+  .anim-wiggle { animation: wiggle 0.5s ease-in-out infinite; }
+  .anim-turn-pulse { animation: turn-pulse 1.4s ease-in-out infinite; }
+  .anim-slot-glow { animation: slot-glow 1.2s ease-in-out infinite; }
+  .anim-pulse-pink { animation: pulse-glow-pink 1.6s ease-out infinite; }
+  .anim-pulse-cyan { animation: pulse-glow-cyan 1.6s ease-out infinite; }
+
+  .title-rainbow {
+    background: linear-gradient(90deg, #ec4899, #f59e0b, #fbbf24, #22d3ee, #a78bfa, #ec4899);
+    background-size: 200% 100%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    animation: title-rainbow 4s linear infinite;
+  }
+
+  .ripple-circle {
+    position: absolute;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.4);
+    pointer-events: none;
+    animation: ripple 0.6s ease-out forwards;
+    transform-origin: center;
+  }
+
+  .grid-bg {
+    background-image:
+      linear-gradient(rgba(236, 72, 153, 0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(236, 72, 153, 0.04) 1px, transparent 1px);
+    background-size: 50px 50px;
+    animation: bg-grid-move 8s linear infinite;
+  }
+`;
+
+// ====================
+// EFFECTS COMPONENTS
+// ====================
+
+function FloatingOrbs() {
+  return (
+    <div className="absolute inset-0 overflow-hidden pointer-events-none">
+      <div className="absolute top-[10%] -left-20 w-72 h-72 bg-pink-500/30 rounded-full blur-3xl" style={{ animation: 'orb-float-a 12s ease-in-out infinite' }} />
+      <div className="absolute bottom-[10%] -right-20 w-80 h-80 bg-cyan-500/25 rounded-full blur-3xl" style={{ animation: 'orb-float-b 14s ease-in-out infinite' }} />
+      <div className="absolute top-[40%] right-[20%] w-56 h-56 bg-yellow-400/20 rounded-full blur-3xl" style={{ animation: 'orb-float-c 10s ease-in-out infinite' }} />
+      <div className="absolute inset-0 grid-bg opacity-50" />
+    </div>
+  );
+}
+
+function Confetti({ count = 100 }) {
+  const pieces = useMemo(() => Array.from({ length: count }, (_, i) => ({
+    id: i,
+    left: Math.random() * 100,
+    color: ['#ec4899', '#f59e0b', '#fbbf24', '#22d3ee', '#a78bfa', '#34d399', '#f43f5e'][Math.floor(Math.random() * 7)],
+    delay: Math.random() * 1.2,
+    duration: 2 + Math.random() * 2.5,
+    rotation: Math.random() * 360,
+    size: 6 + Math.random() * 12,
+    shape: Math.random() > 0.5 ? '50%' : '2px',
+  })), [count]);
+
+  return (
+    <div className="fixed inset-0 pointer-events-none z-50 overflow-hidden">
+      {pieces.map(p => (
+        <div
+          key={p.id}
+          style={{
+            position: 'absolute',
+            left: `${p.left}%`,
+            top: '-5vh',
+            width: `${p.size}px`,
+            height: `${p.size}px`,
+            background: p.color,
+            transform: `rotate(${p.rotation}deg)`,
+            animation: `confetti-fall ${p.duration}s ${p.delay}s linear forwards`,
+            borderRadius: p.shape,
+            boxShadow: `0 0 6px ${p.color}`,
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+
+function StrikeBurst({ trigger }) {
+  if (!trigger) return null;
+  const stars = Array.from({ length: 14 }, (_, i) => ({
+    angle: (i * 25.7) + Math.random() * 10,
+    color: ['#ec4899', '#fbbf24', '#22d3ee', '#a78bfa'][i % 4],
+    delay: Math.random() * 0.15,
+    size: 10 + Math.random() * 10,
+  }));
+
+  return (
+    <div className="fixed inset-0 pointer-events-none z-40 flex items-center justify-center">
+      <div className="relative" style={{ width: 0, height: 0 }}>
+        {stars.map((s, i) => (
+          <div
+            key={i}
+            style={{
+              position: 'absolute',
+              left: '50%',
+              top: '50%',
+              width: `${s.size}px`,
+              height: `${s.size}px`,
+              background: s.color,
+              borderRadius: '50%',
+              boxShadow: `0 0 12px ${s.color}`,
+              '--a': `${s.angle}deg`,
+              animation: `burst-out 0.8s ${s.delay}s ease-out forwards`,
+            }}
+          />
+        ))}
+        <div
+          style={{
+            position: 'absolute',
+            left: '50%',
+            top: '50%',
+            transform: 'translate(-50%, -50%)',
+            width: '120px',
+            height: '120px',
+            background: 'radial-gradient(circle, rgba(255,255,255,0.8) 0%, rgba(236,72,153,0.4) 40%, transparent 70%)',
+            borderRadius: '50%',
+            animation: 'star-pop 0.6s ease-out forwards',
+          }}
+        />
+      </div>
+    </div>
+  );
+}
+
+function ScreenFlash({ trigger, color = 'rgba(236, 72, 153, 0.4)' }) {
+  if (!trigger) return null;
+  return (
+    <div
+      className="fixed inset-0 pointer-events-none z-30"
+      style={{ background: color, animation: 'screen-flash 0.4s ease-out forwards' }}
+    />
+  );
+}
+
+// ====================
+// SHARED UI COMPONENTS
+// ====================
+
+function Btn({ onClick, disabled, children, variant = 'primary', size = 'md', className = '', haptic = 30 }) {
+  const [ripples, setRipples] = useState([]);
+  const [pressed, setPressed] = useState(false);
+
+  const handleClick = (e) => {
+    if (disabled) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    const id = Date.now() + Math.random();
+    setRipples(r => [...r, { id, x, y }]);
+    setTimeout(() => setRipples(r => r.filter(rp => rp.id !== id)), 600);
+    setPressed(true);
+    setTimeout(() => setPressed(false), 250);
+    buzz(haptic);
+    onClick?.(e);
+  };
+
+  const variants = {
+    primary: 'bg-gradient-to-br from-pink-500 to-rose-600 text-white shadow-lg shadow-pink-500/40',
+    secondary: 'bg-zinc-800 text-zinc-100 border border-zinc-700',
+    ghost: 'text-zinc-400',
+    accent: 'bg-gradient-to-br from-cyan-500 to-blue-600 text-white shadow-lg shadow-cyan-500/40',
+    win: 'bg-gradient-to-br from-yellow-400 via-orange-500 to-pink-500 text-white shadow-xl shadow-orange-500/40',
+  };
+  const sizes = {
+    sm: 'px-3 py-2 text-sm',
+    md: 'px-4 py-3 text-base',
+    lg: 'px-6 py-4 text-lg',
+  };
+  return (
+    <button
+      onClick={handleClick}
+      disabled={disabled}
+      className={`relative overflow-hidden rounded-xl font-bold transition-all disabled:opacity-30 disabled:cursor-not-allowed ${variants[variant]} ${sizes[size]} ${className} ${pressed ? 'anim-button-press' : ''}`}
+    >
+      {ripples.map(r => (
+        <span
+          key={r.id}
+          className="ripple-circle"
+          style={{ left: r.x - 10, top: r.y - 10, width: 20, height: 20 }}
+        />
+      ))}
+      <span className="relative z-10">{children}</span>
+    </button>
+  );
+}
+
+function DigitSlots({ value, digits, hidden = false, large = false, complete = false }) {
+  return (
+    <div className={`flex gap-2 justify-center ${large ? 'my-6' : 'my-3'}`}>
+      {Array.from({ length: digits }, (_, i) => {
+        const filled = value[i] !== undefined;
+        return (
+          <div
+            key={i}
+            className={`${large ? 'w-14 h-16 text-3xl' : 'w-11 h-12 text-2xl'} rounded-xl flex items-center justify-center font-mono font-black border-2 transition-all duration-200 ${
+              filled
+                ? 'border-pink-500 bg-pink-500/10 text-white'
+                : 'border-zinc-800 bg-zinc-950 text-zinc-700'
+            } ${complete ? 'anim-slot-glow' : ''}`}
+          >
+            {filled && (
+              <span key={value[i] + '-' + i} className="anim-digit-pop inline-block">
+                {hidden ? '●' : value[i]}
+              </span>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function NumberPad({ value, onChange, digits, disabled = false, eliminated }) {
+  const elim = eliminated || new Set();
+  const used = (d) => value.includes(String(d));
+  const full = value.length >= digits;
+  const [pressed, setPressed] = useState(null);
+
+  const tap = (d) => {
+    if (disabled || full || used(d) || elim.has(String(d))) return;
+    setPressed(d);
+    setTimeout(() => setPressed(null), 200);
+    buzz(15);
+    onChange(value + String(d));
+  };
+  const back = () => {
+    if (disabled || value.length === 0) return;
+    buzz(15);
+    onChange(value.slice(0, -1));
+  };
+  const clear = () => {
+    if (disabled || value.length === 0) return;
+    buzz([10, 20, 10]);
+    onChange('');
+  };
+
+  const Key = ({ d }) => {
+    const isElim = elim.has(String(d));
+    const isUsed = used(d) || full;
+    const isPressed = pressed === d;
+    const isDisabled = disabled || isUsed || isElim;
+    return (
+      <button
+        onClick={() => tap(d)}
+        disabled={isDisabled}
+        className={`relative h-14 rounded-xl font-bold text-2xl font-mono transition-all duration-150 overflow-hidden
+          ${isElim
+            ? 'bg-gradient-to-br from-red-900/90 to-red-950 text-red-300/40 border-2 border-red-600/60 shadow-inner shadow-red-900/50'
+            : isUsed
+              ? 'bg-zinc-900 text-zinc-700'
+              : 'bg-gradient-to-br from-zinc-800 to-zinc-900 text-white border border-zinc-700 active:from-pink-500 active:to-rose-600 active:border-pink-400 active:scale-90'
+          }
+          ${isPressed ? 'anim-button-press' : ''}
+          disabled:cursor-not-allowed`}
+      >
+        <span className={isElim ? 'opacity-30' : ''}>{d}</span>
+        {isElim && (
+          <span className="absolute inset-0 flex items-center justify-center pointer-events-none">
+            <span
+              className="block w-14 h-1 bg-red-400 rounded-full"
+              style={{ transform: 'rotate(-30deg)', boxShadow: '0 0 10px rgba(248,113,113,0.9), 0 0 4px rgba(0,0,0,0.6)' }}
+            />
+          </span>
+        )}
+      </button>
+    );
+  };
+
+  return (
+    <div>
+      {elim.size > 0 && (
+        <div className="mb-2 flex items-center gap-2 px-3 py-2 bg-red-950/30 border border-red-900/40 rounded-lg text-xs">
+          <span className="text-red-400 font-bold">✗ 使えない数字:</span>
+          <span className="font-mono font-bold text-red-300 tracking-widest">
+            {[...elim].sort().join(' ')}
+          </span>
+        </div>
+      )}
+      <div className="grid grid-cols-3 gap-2">
+        <Key d={1} /><Key d={2} /><Key d={3} />
+        <Key d={4} /><Key d={5} /><Key d={6} />
+        <Key d={7} /><Key d={8} /><Key d={9} />
+        <button
+          onClick={clear}
+          disabled={disabled || value.length === 0}
+          className="h-14 rounded-xl font-bold text-xs bg-zinc-900 text-zinc-400 active:bg-zinc-700 active:scale-90 disabled:opacity-40 transition-all"
+        >
+          クリア
+        </button>
+        <Key d={0} />
+        <button
+          onClick={back}
+          disabled={disabled || value.length === 0}
+          className="h-14 rounded-xl font-bold text-xl bg-zinc-900 text-zinc-300 active:bg-zinc-700 active:scale-90 disabled:opacity-40 transition-all"
+        >
+          ⌫
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function FB({ fb, animate = false }) {
+  if (!fb) return <span className="text-zinc-600 text-xs">…</span>;
+  if (fb.s === 0 && fb.b === 0)
+    return <span className={`text-zinc-500 font-bold text-sm ${animate ? 'anim-feedback-pop' : ''} inline-block`}>なし</span>;
+  return (
+    <span className={`font-mono font-bold text-sm flex items-center gap-1 ${animate ? 'anim-feedback-pop' : ''}`}>
+      {fb.s > 0 && (
+        <span className="text-pink-400 drop-shadow-[0_0_6px_rgba(236,72,153,0.6)]">
+          {fb.s}<span className="text-xs opacity-70">S</span>
+        </span>
+      )}
+      {fb.b > 0 && (
+        <span className="text-yellow-400 drop-shadow-[0_0_6px_rgba(250,204,21,0.6)]">
+          {fb.b}<span className="text-xs opacity-70">B</span>
+        </span>
+      )}
+    </span>
+  );
+}
+
+function GuessRow({ guess, fb, num, isWin = false, isLatest = false }) {
+  return (
+    <div className={`flex items-center justify-between px-3 py-2 rounded-lg transition-all ${
+      isWin
+        ? 'bg-gradient-to-r from-pink-500/30 to-yellow-400/30 border border-yellow-400/60 shadow-lg shadow-pink-500/20'
+        : 'bg-zinc-900/70 border border-zinc-800'
+    } ${isLatest ? 'anim-guess-in' : ''}`}>
+      <div className="flex items-center gap-3 min-w-0">
+        <span className="text-zinc-600 text-xs font-mono w-5 shrink-0">{num}</span>
+        <span className="font-mono text-base font-bold text-white tracking-wider">{guess}</span>
+        {isWin && <Sparkles size={14} className="text-yellow-300" />}
+      </div>
+      <FB fb={fb} animate={isLatest} />
+    </div>
+  );
+}
+
+function Header({ title, subtitle, onBack }) {
+  return (
+    <div className="flex items-center gap-2 mb-5">
+      {onBack && (
+        <button
+          onClick={() => { buzz(20); onBack(); }}
+          className="text-zinc-400 active:text-pink-400 active:scale-90 -ml-1 p-1.5 rounded-lg active:bg-zinc-800 transition-all"
+        >
+          <ArrowLeft size={20} />
+        </button>
+      )}
+      <div className="flex-1 min-w-0">
+        <h1 className="text-2xl font-black text-white leading-none" style={{ fontFamily: "'DotGothic16', monospace" }}>{title}</h1>
+        {subtitle && <p className="text-zinc-400 text-xs mt-1">{subtitle}</p>}
+      </div>
+    </div>
+  );
+}
+
+// ====================
+// MAIN APP
+// ====================
+
+export default function App() {
+  const [screen, setScreen] = useState('title');
+  const [mode, setMode] = useState(null);
+  const [digits, setDigits] = useState(3);
+  const [maxTurns, setMaxTurns] = useState(0);
+
+  const [game, setGame] = useState(null);
+  const [cpuPoss, setCpuPoss] = useState([]);
+  const [localPhase, setLocalPhase] = useState('');
+
+  const [roomCode, setRoomCode] = useState('');
+  const [role, setRole] = useState(null);
+  const [mySecret, setMySecret] = useState('');
+  const [remoteState, setRemoteState] = useState(null);
+  const [remoteError, setRemoteError] = useState('');
+  const [copied, setCopied] = useState(false);
+
+  const [input, setInput] = useState('');
+  const [reveal, setReveal] = useState(false);
+
+  // Animation triggers
+  const [strikeBurst, setStrikeBurst] = useState(0);
+  const [screenFlash, setScreenFlash] = useState(0);
+
+  function triggerStrike() {
+    setStrikeBurst(Date.now());
+    setScreenFlash(Date.now());
+    buzz([60, 40, 60, 40, 100]);
+  }
+
+  function resetAll() {
+    setMode(null); setDigits(3); setMaxTurns(0);
+    setGame(null); setCpuPoss([]);
+    setLocalPhase(''); setInput('');
+    setRoomCode(''); setRole(null); setMySecret(''); setRemoteState(null); setRemoteError('');
+    setCopied(false); setReveal(false);
+  }
+
+  // Firebase realtime listener
+  useEffect(() => {
+    if (mode !== 'remote' || !roomCode || !window._db) return;
+    const ref = window._db.ref(STORAGE_PREFIX + roomCode);
+    const handler = ref.on('value', (snap) => {
+      if (snap.exists()) setRemoteState(snap.val());
+    });
+    return () => ref.off('value', handler);
+  }, [mode, roomCode]);
+
+  // Compute opponent's feedback when needed
+  useEffect(() => {
+    if (mode !== 'remote' || !remoteState || !mySecret || !role) return;
+    const oppRole = role === 'p1' ? 'p2' : 'p1';
+
+    (async () => {
+      const cur = await storageGet(STORAGE_PREFIX + roomCode);
+      if (!cur) return;
+      let updated = cur;
+      let changed = false;
+
+      const newTurns = (updated.turns || []).map(t => {
+        if (t[oppRole + 'Guess'] && !t[oppRole + 'Feedback']) {
+          changed = true;
+          return { ...t, [oppRole + 'Feedback']: calcResult(t[oppRole + 'Guess'], mySecret) };
+        }
+        return t;
+      });
+      if (changed) updated = { ...updated, turns: newTurns };
+
+      const finalized = applyEndCheck(updated);
+      if (finalized !== updated) { changed = true; updated = finalized; }
+
+      if (changed) {
+        updated = { ...updated, ts: Date.now() };
+        await storageSet(STORAGE_PREFIX + roomCode, updated);
+        setRemoteState(updated);
+      }
+    })();
+  }, [remoteState, mySecret, role, mode, roomCode]);
+
+  function applyEndCheck(state) {
+    if (!state || state.winner) return state;
+    const turns = state.turns || [];
+    if (turns.length === 0) return state;
+    const last = turns[turns.length - 1];
+    if (!last.p1Feedback || !last.p2Feedback) return state;
+    const p1Win = last.p1Feedback.s === state.digits;
+    const p2Win = last.p2Feedback.s === state.digits;
+    if (p1Win && p2Win) return { ...state, winner: 'draw' };
+    if (p1Win) return { ...state, winner: 'p1' };
+    if (p2Win) return { ...state, winner: 'p2' };
+    if (state.maxTurns > 0 && turns.length >= state.maxTurns) {
+      const p1S = last.p1Feedback.s, p2S = last.p2Feedback.s;
+      if (p1S > p2S) return { ...state, winner: 'p1' };
+      if (p2S > p1S) return { ...state, winner: 'p2' };
+      return { ...state, winner: 'draw' };
+    }
+    if (last.p1Guess && last.p2Guess && last.p1Feedback && last.p2Feedback) {
+      return { ...state, turns: [...turns, { p1Guess: null, p1Feedback: null, p2Guess: null, p2Feedback: null }], currentPlayer: 'p1' };
+    }
+    return state;
+  }
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-zinc-950 via-zinc-900 to-zinc-950 text-white relative overflow-hidden" style={{ fontFamily: "'Zen Kaku Gothic New', system-ui, sans-serif" }}>
+      <style>{GLOBAL_STYLES}</style>
+      <FloatingOrbs />
+
+      <StrikeBurst key={'sb-' + strikeBurst} trigger={strikeBurst} />
+      <ScreenFlash key={'sf-' + screenFlash} trigger={screenFlash} />
+
+      <div className="relative max-w-md mx-auto px-4 py-6 min-h-screen z-10">
+        {screen === 'title' && (
+          <TitleScreen onPick={(m) => {
+            buzz(40);
+            setMode(m);
+            setScreen(m === 'remote' ? 'remote_choice' : 'settings');
+          }} />
+        )}
+
+        {screen === 'settings' && (
+          <SettingsScreen
+            digits={digits} setDigits={setDigits}
+            maxTurns={maxTurns} setMaxTurns={setMaxTurns}
+            mode={mode}
+            onBack={() => { resetAll(); setScreen('title'); }}
+            onStart={() => {
+              if (mode === 'cpu') {
+                const all = genAllValid(digits);
+                const cpuSecret = all[Math.floor(Math.random() * all.length)];
+                setGame({ digits, maxTurns, p1Secret: '', p2Secret: cpuSecret, currentPlayer: 'p1', turns: [], winner: null });
+                setCpuPoss(all);
+                setInput('');
+                setScreen('cpu_secret');
+              } else if (mode === 'local') {
+                setGame({ digits, maxTurns, p1Secret: '', p2Secret: '', currentPlayer: 'p1', turns: [], winner: null });
+                setLocalPhase('handoff_p1');
+                setInput('');
+                setScreen('local_setup');
+              }
+            }}
+          />
+        )}
+
+        {screen === 'cpu_secret' && (
+          <SecretEntryScreen
+            title="自分の数字を決める"
+            subtitle={`CPUに当てさせる ${digits} 桁を入力（重複なし）`}
+            digits={digits}
+            input={input} setInput={setInput}
+            reveal={reveal} setReveal={setReveal}
+            onBack={() => { resetAll(); setScreen('title'); }}
+            onConfirm={() => {
+              setGame(g => ({ ...g, p1Secret: input, turns: [{ p1Guess: null, p1Feedback: null, p2Guess: null, p2Feedback: null }] }));
+              setInput('');
+              setScreen('cpu_game');
+            }}
+          />
+        )}
+
+        {screen === 'cpu_game' && game && (
+          <CpuGameScreen
+            game={game} setGame={setGame}
+            cpuPoss={cpuPoss} setCpuPoss={setCpuPoss}
+            input={input} setInput={setInput}
+            onBack={() => { resetAll(); setScreen('title'); }}
+            onEnd={() => setScreen('end')}
+            onStrike={triggerStrike}
+          />
+        )}
+
+        {screen === 'local_setup' && (
+          <LocalSetupScreen
+            phase={localPhase} setPhase={setLocalPhase}
+            digits={digits}
+            input={input} setInput={setInput}
+            game={game} setGame={setGame}
+            reveal={reveal} setReveal={setReveal}
+            onBack={() => { resetAll(); setScreen('title'); }}
+            onStartGame={() => { setInput(''); setScreen('local_game'); }}
+          />
+        )}
+
+        {screen === 'local_game' && game && (
+          <LocalGameScreen
+            game={game} setGame={setGame}
+            input={input} setInput={setInput}
+            onBack={() => { resetAll(); setScreen('title'); }}
+            onEnd={() => setScreen('end')}
+            onStrike={triggerStrike}
+          />
+        )}
+
+        {screen === 'remote_choice' && (
+          <RemoteChoiceScreen
+            onBack={() => { resetAll(); setScreen('title'); }}
+            onCreate={() => setScreen('settings_remote')}
+            onJoin={() => { setRoomCode(''); setRemoteError(''); setScreen('remote_join'); }}
+          />
+        )}
+
+        {screen === 'settings_remote' && (
+          <SettingsScreen
+            digits={digits} setDigits={setDigits}
+            maxTurns={maxTurns} setMaxTurns={setMaxTurns}
+            mode="remote"
+            onBack={() => { resetAll(); setScreen('title'); }}
+            onStart={() => {
+              const code = genRoomCode();
+              const initial = {
+                digits, maxTurns,
+                p1Joined: true, p2Joined: false,
+                p1Ready: false, p2Ready: false,
+                turns: [{ p1Guess: null, p1Feedback: null, p2Guess: null, p2Feedback: null }],
+                currentPlayer: 'p1',
+                winner: null,
+                ts: Date.now(),
+              };
+              (async () => {
+                const ok = await storageSet(STORAGE_PREFIX + code, initial);
+                if (ok) {
+                  setRoomCode(code); setRole('p1'); setRemoteState(initial);
+                  setScreen('remote_waiting_join');
+                } else {
+                  setRemoteError('オンライン機能が使えません');
+                }
+              })();
+            }}
+          />
+        )}
+
+        {screen === 'remote_join' && (
+          <RemoteJoinScreen
+            onBack={() => { resetAll(); setScreen('title'); }}
+            error={remoteError} setError={setRemoteError}
+            onSubmit={(code) => {
+              (async () => {
+                const s = await storageGet(STORAGE_PREFIX + code);
+                if (!s) { setRemoteError('ルームが見つかりません'); buzz([20, 40, 20]); return; }
+                if (s.p2Joined) { setRemoteError('このルームは満員です'); buzz([20, 40, 20]); return; }
+                const updated = { ...s, p2Joined: true, ts: Date.now() };
+                await storageSet(STORAGE_PREFIX + code, updated);
+                setRoomCode(code); setRole('p2');
+                setDigits(s.digits); setMaxTurns(s.maxTurns);
+                setRemoteState(updated);
+                setScreen('remote_secret');
+              })();
+            }}
+          />
+        )}
+
+        {screen === 'remote_waiting_join' && (
+          <RemoteWaitingJoinScreen
+            roomCode={roomCode}
+            joined={remoteState && remoteState.p2Joined}
+            copied={copied} setCopied={setCopied}
+            digits={digits} maxTurns={maxTurns}
+            onCancel={() => { resetAll(); setScreen('title'); }}
+            onContinue={() => setScreen('remote_secret')}
+          />
+        )}
+
+        {screen === 'remote_secret' && (
+          <SecretEntryScreen
+            title="自分の数字を決める"
+            subtitle={`相手に当てさせる ${digits} 桁を入力（重複なし）`}
+            digits={digits}
+            input={input} setInput={setInput}
+            reveal={reveal} setReveal={setReveal}
+            onBack={() => { resetAll(); setScreen('title'); }}
+            onConfirm={() => {
+              setMySecret(input); setInput('');
+              (async () => {
+                const cur = await storageGet(STORAGE_PREFIX + roomCode);
+                if (!cur) return;
+                const updated = { ...cur, [role + 'Ready']: true, ts: Date.now() };
+                await storageSet(STORAGE_PREFIX + roomCode, updated);
+                setRemoteState(updated);
+                setScreen('remote_game');
+              })();
+            }}
+          />
+        )}
+
+        {screen === 'remote_game' && remoteState && (
+          <RemoteGameScreen
+            roomCode={roomCode} role={role} mySecret={mySecret}
+            state={remoteState}
+            input={input} setInput={setInput}
+            onBack={() => { resetAll(); setScreen('title'); }}
+            onEnd={() => setScreen('end')}
+            onStrike={triggerStrike}
+          />
+        )}
+
+        {screen === 'end' && (
+          <EndScreen
+            mode={mode}
+            game={mode === 'remote' ? remoteState : game}
+            role={role}
+            mySecret={mySecret}
+            onBackToTitle={() => { resetAll(); setScreen('title'); }}
+          />
+        )}
+
+        {remoteError && screen !== 'remote_join' && (
+          <div className="fixed bottom-4 left-4 right-4 max-w-md mx-auto bg-red-900/80 border border-red-600 rounded-xl p-3 text-sm anim-shake z-50">
+            {remoteError}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ====================
+// SCREENS
+// ====================
+
+function TitleScreen({ onPick }) {
+  return (
+    <div className="flex flex-col min-h-[calc(100vh-3rem)]">
+      <div className="flex-1 flex flex-col items-center justify-center text-center pt-8 pb-10">
+        <div className="mb-2 text-pink-400 text-xs font-bold tracking-[0.3em] anim-wiggle inline-block">★ NUMBER BATTLE ★</div>
+        <h1
+          className="text-5xl font-black mb-3 leading-none title-rainbow"
+          style={{ fontFamily: "'DotGothic16', monospace", animation: 'title-bounce 2.5s ease-in-out infinite, title-rainbow 4s linear infinite' }}
+        >
+          ヒット＆ブロー
+        </h1>
+        <p className="text-zinc-300 text-sm max-w-xs">
+          相手の数字を予測して当てよう！<br />
+          位置も合えば <span className="text-pink-400 font-bold drop-shadow-[0_0_8px_rgba(236,72,153,0.7)]">ストライク</span>、数字だけなら <span className="text-yellow-400 font-bold drop-shadow-[0_0_8px_rgba(250,204,21,0.7)]">ボール</span>
+        </p>
+      </div>
+
+      <div className="space-y-3 pb-6">
+        <ModeButton
+          icon={<Cpu size={22} />}
+          gradient="from-cyan-500 to-blue-600"
+          glow="shadow-cyan-500/30"
+          title="CPU と対戦"
+          subtitle="1人で気軽にプレイ"
+          onClick={() => onPick('cpu')}
+        />
+        <ModeButton
+          icon={<Users size={22} />}
+          gradient="from-pink-500 to-rose-600"
+          glow="shadow-pink-500/30"
+          title="同じ端末で2人対戦"
+          subtitle="スマホを交代しながら"
+          onClick={() => onPick('local')}
+        />
+        <ModeButton
+          icon={<Wifi size={22} />}
+          gradient="from-yellow-400 to-orange-500"
+          glow="shadow-orange-500/30"
+          title="別の端末で対戦"
+          subtitle="ルームコードで友達と"
+          onClick={() => onPick('remote')}
+        />
+      </div>
+    </div>
+  );
+}
+
+function ModeButton({ icon, gradient, glow, title, subtitle, onClick }) {
+  const [pressed, setPressed] = useState(false);
+  const [ripples, setRipples] = useState([]);
+
+  const handle = (e) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    const id = Date.now();
+    setRipples(r => [...r, { id, x, y }]);
+    setTimeout(() => setRipples(r => r.filter(rp => rp.id !== id)), 600);
+    setPressed(true);
+    setTimeout(() => setPressed(false), 250);
+    buzz(35);
+    onClick();
+  };
+
+  return (
+    <button
+      onClick={handle}
+      className={`relative overflow-hidden w-full p-4 rounded-2xl bg-zinc-900/80 backdrop-blur border border-zinc-800 active:bg-zinc-800 transition-all flex items-center gap-4 text-left ${pressed ? 'anim-button-press' : ''} active:shadow-lg active:${glow}`}
+    >
+      {ripples.map(r => (
+        <span key={r.id} className="ripple-circle" style={{ left: r.x - 10, top: r.y - 10, width: 20, height: 20 }} />
+      ))}
+      <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${gradient} flex items-center justify-center shrink-0 shadow-lg ${glow}`}>
+        {icon}
+      </div>
+      <div className="flex-1 relative z-10">
+        <div className="font-bold text-white">{title}</div>
+        <div className="text-xs text-zinc-400 mt-0.5">{subtitle}</div>
+      </div>
+    </button>
+  );
+}
+
+function SettingsScreen({ digits, setDigits, maxTurns, setMaxTurns, mode, onBack, onStart }) {
+  const modeLabel = mode === 'cpu' ? 'CPU と対戦' : mode === 'local' ? '同じ端末で2人' : '別の端末で対戦';
+  const PickBtn = ({ active, onClick, children, color = 'pink' }) => (
+    <button
+      onClick={() => { buzz(20); onClick(); }}
+      className={`py-3 rounded-xl font-bold transition-all active:scale-90 ${
+        active
+          ? color === 'pink'
+            ? 'bg-gradient-to-br from-pink-500 to-rose-600 text-white shadow-lg shadow-pink-500/30'
+            : 'bg-gradient-to-br from-cyan-500 to-blue-600 text-white shadow-lg shadow-cyan-500/30'
+          : 'bg-zinc-900 text-zinc-400 border border-zinc-800'
+      }`}
+    >
+      {children}
+    </button>
+  );
+
+  return (
+    <div>
+      <Header title="ゲーム設定" subtitle={modeLabel} onBack={onBack} />
+      <div className="space-y-5">
+        <div>
+          <div className="text-xs font-bold text-zinc-400 mb-2 tracking-wider">桁数</div>
+          <div className="grid grid-cols-2 gap-2">
+            {[3, 4].map(d => (
+              <PickBtn key={d} active={digits === d} onClick={() => setDigits(d)} color="pink">
+                <span className="text-lg">{d} 桁</span>
+              </PickBtn>
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <div className="text-xs font-bold text-zinc-400 mb-2 tracking-wider">ターン数</div>
+          <div className="grid grid-cols-3 gap-2">
+            <PickBtn active={maxTurns === 0} onClick={() => setMaxTurns(0)} color="cyan">無制限</PickBtn>
+            {[3, 5].map(t => (
+              <PickBtn key={t} active={maxTurns === t} onClick={() => setMaxTurns(t)} color="cyan">{t}</PickBtn>
+            ))}
+          </div>
+          <div className="grid grid-cols-5 gap-2 mt-2">
+            {[1, 2, 4, 7, 10].map(t => (
+              <button
+                key={t}
+                onClick={() => { buzz(15); setMaxTurns(t); }}
+                className={`py-2.5 rounded-xl font-bold text-sm transition-all active:scale-90 ${
+                  maxTurns === t ? 'bg-gradient-to-br from-cyan-500 to-blue-600 text-white shadow-lg shadow-cyan-500/30' : 'bg-zinc-900 text-zinc-500 border border-zinc-800'
+                }`}
+              >
+                {t}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-3 text-xs text-zinc-400 leading-relaxed">
+          <span className="text-pink-400 font-bold">ルール: </span>
+          各プレイヤーが {digits} 桁の数字（0-9、重複なし）を秘密で決め、お互いに予測。位置も合致＝<span className="text-pink-400 font-bold">S</span>、数字のみ＝<span className="text-yellow-400 font-bold">B</span>。
+          {maxTurns > 0 && <> <br />ターン上限到達時は最後のSが多い方の勝ち。</>}
+        </div>
+
+        <Btn onClick={onStart} size="lg" variant="win" className="w-full" haptic={50}>
+          🎮 スタート！
+        </Btn>
+      </div>
+    </div>
+  );
+}
+
+function SecretEntryScreen({ title, subtitle, digits, input, setInput, reveal, setReveal, onBack, onConfirm }) {
+  const valid = isValidNum(input, digits);
+  return (
+    <div>
+      <Header title={title} subtitle={subtitle} onBack={onBack} />
+
+      <div className="bg-zinc-900/60 border border-zinc-800 rounded-2xl p-4 mb-4">
+        <DigitSlots value={input} digits={digits} hidden={!reveal} large complete={valid} />
+        <button
+          onClick={() => { buzz(15); setReveal(r => !r); }}
+          className="w-full text-xs text-zinc-500 active:text-zinc-300 active:scale-95 flex items-center justify-center gap-1 mt-1 transition-all"
+        >
+          {reveal ? <><EyeOff size={12} /> 隠す</> : <><Eye size={12} /> 表示</>}
+        </button>
+      </div>
+
+      <NumberPad value={input} onChange={setInput} digits={digits} />
+
+      <Btn onClick={onConfirm} disabled={!valid} size="lg" variant="primary" className="w-full mt-5" haptic={40}>
+        この数字で決定 →
+      </Btn>
+    </div>
+  );
+}
+
+// ===== CPU Game =====
+
+function CpuGameScreen({ game, setGame, cpuPoss, setCpuPoss, input, setInput, onBack, onEnd, onStrike }) {
+  const { digits, maxTurns, p1Secret, p2Secret, turns, winner } = game;
+  const lastTurn = turns[turns.length - 1];
+  const myTurn = lastTurn && !lastTurn.p1Guess && !winner;
+  const cpuTurn = lastTurn && lastTurn.p1Guess && !lastTurn.p2Guess && !winner;
+  const valid = isValidNum(input, digits);
+
+  useEffect(() => {
+    if (winner || !cpuTurn) return;
+    const t = setTimeout(() => {
+      const guess = cpuPoss.length > 0 ? cpuPoss[Math.floor(Math.random() * cpuPoss.length)] : genAllValid(digits)[0];
+      const fb = calcResult(guess, p1Secret);
+      const newPoss = filterPoss(cpuPoss, guess, fb);
+      setCpuPoss(newPoss);
+      if (fb.s === digits) onStrike();
+      setGame(g => {
+        const nt = [...g.turns];
+        nt[nt.length - 1] = { ...nt[nt.length - 1], p2Guess: guess, p2Feedback: fb };
+        return finalizeAfterTurn({ ...g, turns: nt });
+      });
+    }, 900);
+    return () => clearTimeout(t);
+  }, [cpuTurn, winner]);
+
+  useEffect(() => {
+    if (winner) {
+      const t = setTimeout(onEnd, 1800);
+      return () => clearTimeout(t);
+    }
+  }, [winner]);
+
+  function submitMyGuess() {
+    if (!valid || !myTurn || winner) return;
+    const fb = calcResult(input, p2Secret);
+    if (fb.s === digits) onStrike();
+    setGame(g => {
+      const nt = [...g.turns];
+      nt[nt.length - 1] = { ...nt[nt.length - 1], p1Guess: input, p1Feedback: fb };
+      return { ...g, turns: nt };
+    });
+    setInput('');
+  }
+
+  function finalizeAfterTurn(g) {
+    const turns = g.turns;
+    const last = turns[turns.length - 1];
+    if (!last.p1Feedback || !last.p2Feedback) return g;
+    const p1Win = last.p1Feedback.s === g.digits;
+    const p2Win = last.p2Feedback.s === g.digits;
+    if (p1Win && p2Win) return { ...g, winner: 'draw' };
+    if (p1Win) return { ...g, winner: 'p1' };
+    if (p2Win) return { ...g, winner: 'p2' };
+    if (g.maxTurns > 0 && turns.length >= g.maxTurns) {
+      const p1S = last.p1Feedback.s, p2S = last.p2Feedback.s;
+      if (p1S > p2S) return { ...g, winner: 'p1' };
+      if (p2S > p1S) return { ...g, winner: 'p2' };
+      return { ...g, winner: 'draw' };
+    }
+    return { ...g, turns: [...turns, { p1Guess: null, p1Feedback: null, p2Guess: null, p2Feedback: null }] };
+  }
+
+  const myGuesses = turns.filter(t => t.p1Guess).map(t => ({ value: t.p1Guess, fb: t.p1Feedback }));
+  const cpuGuesses = turns.filter(t => t.p2Guess).map(t => ({ value: t.p2Guess, fb: t.p2Feedback }));
+  const myEliminated = useMemo(() => computeEliminated(myGuesses), [turns]);
+
+  return (
+    <div>
+      <Header title={`ターン ${turns.length}${maxTurns > 0 ? ` / ${maxTurns}` : ''}`} subtitle="CPU と対戦中" onBack={onBack} />
+
+      <GameBoards
+        leftLabel="YOU → CPU" leftColor="pink" leftActive={myTurn} leftGuesses={myGuesses}
+        rightLabel="CPU → YOU" rightColor="cyan" rightActive={cpuTurn} rightGuesses={cpuGuesses}
+        digits={digits}
+      />
+
+      {!winner && (
+        <>
+          <div className={`text-center mb-2 text-sm font-bold ${myTurn ? 'text-pink-400 anim-turn-pulse' : 'text-cyan-400'}`}>
+            {myTurn ? '🎯 あなたのターン' : '🤖 CPU が考え中…'}
+          </div>
+          <div className="bg-zinc-900/60 border border-zinc-800 rounded-2xl p-3 mb-3">
+            <DigitSlots value={input} digits={digits} complete={valid && myTurn} />
+          </div>
+          <NumberPad value={input} onChange={setInput} digits={digits} disabled={!myTurn} eliminated={myEliminated} />
+          <Btn onClick={submitMyGuess} disabled={!valid || !myTurn} size="lg" variant="primary" className="w-full mt-4" haptic={50}>
+            🎯 予想を送る
+          </Btn>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ===== Local 2P =====
+
+function LocalSetupScreen({ phase, setPhase, digits, input, setInput, game, setGame, reveal, setReveal, onBack, onStartGame }) {
+  if (phase === 'handoff_p1') {
+    return (
+      <Handoff
+        title="プレイヤー1の番" emoji="👤"
+        body="自分以外に画面が見えない状態で、準備ができたらタップしてください。"
+        onBack={onBack}
+        onContinue={() => { setReveal(false); setPhase('enter_p1'); }}
+      />
+    );
+  }
+  if (phase === 'enter_p1') {
+    return (
+      <SecretEntryScreen
+        title="P1 の数字を決める" subtitle={`P2 に当てさせる ${digits} 桁`}
+        digits={digits} input={input} setInput={setInput}
+        reveal={reveal} setReveal={setReveal}
+        onBack={onBack}
+        onConfirm={() => {
+          setGame(g => ({ ...g, p1Secret: input }));
+          setInput(''); setReveal(false);
+          setPhase('handoff_p2');
+        }}
+      />
+    );
+  }
+  if (phase === 'handoff_p2') {
+    return (
+      <Handoff
+        title="プレイヤー2に交代" emoji="🔄"
+        body="P2 が画面を確認できる状態で、準備ができたらタップしてください。"
+        onBack={onBack}
+        onContinue={() => { setReveal(false); setPhase('enter_p2'); }}
+      />
+    );
+  }
+  if (phase === 'enter_p2') {
+    return (
+      <SecretEntryScreen
+        title="P2 の数字を決める" subtitle={`P1 に当てさせる ${digits} 桁`}
+        digits={digits} input={input} setInput={setInput}
+        reveal={reveal} setReveal={setReveal}
+        onBack={onBack}
+        onConfirm={() => {
+          setGame(g => ({ ...g, p2Secret: input, turns: [{ p1Guess: null, p1Feedback: null, p2Guess: null, p2Feedback: null }] }));
+          setInput(''); setReveal(false);
+          onStartGame();
+        }}
+      />
+    );
+  }
+  return null;
+}
+
+function Handoff({ title, emoji, body, onBack, onContinue }) {
+  return (
+    <div>
+      <Header title={title} onBack={onBack} />
+      <div className="flex flex-col items-center justify-center py-12 text-center">
+        <div className="w-24 h-24 rounded-full bg-gradient-to-br from-pink-500 via-rose-500 to-orange-500 flex items-center justify-center mb-6 shadow-2xl shadow-pink-500/40 anim-wiggle text-5xl">
+          {emoji}
+        </div>
+        <p className="text-zinc-300 text-base max-w-xs leading-relaxed mb-8">{body}</p>
+        <Btn onClick={onContinue} size="lg" variant="primary" className="w-full max-w-xs" haptic={40}>
+          準備OK ✨
+        </Btn>
+      </div>
+    </div>
+  );
+}
+
+function LocalGameScreen({ game, setGame, input, setInput, onBack, onEnd, onStrike }) {
+  const { digits, maxTurns, p1Secret, p2Secret, turns, winner } = game;
+  const lastTurn = turns[turns.length - 1];
+  const isP1Turn = lastTurn && !lastTurn.p1Guess && !winner;
+  const isP2Turn = lastTurn && lastTurn.p1Guess && !lastTurn.p2Guess && !winner;
+  const valid = isValidNum(input, digits);
+
+  useEffect(() => {
+    if (winner) {
+      const t = setTimeout(onEnd, 1800);
+      return () => clearTimeout(t);
+    }
+  }, [winner]);
+
+  function submit() {
+    if (!valid || winner) return;
+    if (isP1Turn) {
+      const fb = calcResult(input, p2Secret);
+      if (fb.s === digits) onStrike();
+      setGame(g => {
+        const nt = [...g.turns];
+        nt[nt.length - 1] = { ...nt[nt.length - 1], p1Guess: input, p1Feedback: fb };
+        return { ...g, turns: nt };
+      });
+      setInput('');
+    } else if (isP2Turn) {
+      const fb = calcResult(input, p1Secret);
+      if (fb.s === digits) onStrike();
+      setGame(g => {
+        const nt = [...g.turns];
+        nt[nt.length - 1] = { ...nt[nt.length - 1], p2Guess: input, p2Feedback: fb };
+        return finalizeLocal({ ...g, turns: nt });
+      });
+      setInput('');
+    }
+  }
+
+  function finalizeLocal(g) {
+    const turns = g.turns;
+    const last = turns[turns.length - 1];
+    if (!last.p1Feedback || !last.p2Feedback) return g;
+    const p1Win = last.p1Feedback.s === g.digits;
+    const p2Win = last.p2Feedback.s === g.digits;
+    if (p1Win && p2Win) return { ...g, winner: 'draw' };
+    if (p1Win) return { ...g, winner: 'p1' };
+    if (p2Win) return { ...g, winner: 'p2' };
+    if (g.maxTurns > 0 && turns.length >= g.maxTurns) {
+      const p1S = last.p1Feedback.s, p2S = last.p2Feedback.s;
+      if (p1S > p2S) return { ...g, winner: 'p1' };
+      if (p2S > p1S) return { ...g, winner: 'p2' };
+      return { ...g, winner: 'draw' };
+    }
+    return { ...g, turns: [...turns, { p1Guess: null, p1Feedback: null, p2Guess: null, p2Feedback: null }] };
+  }
+
+  const p1G = turns.filter(t => t.p1Guess).map(t => ({ value: t.p1Guess, fb: t.p1Feedback }));
+  const p2G = turns.filter(t => t.p2Guess).map(t => ({ value: t.p2Guess, fb: t.p2Feedback }));
+  const currentEliminated = useMemo(
+    () => computeEliminated(isP1Turn ? p1G : p2G),
+    [turns, isP1Turn]
+  );
+
+  return (
+    <div>
+      <Header title={`ターン ${turns.length}${maxTurns > 0 ? ` / ${maxTurns}` : ''}`} subtitle="同じ端末で2人対戦" onBack={onBack} />
+
+      <GameBoards
+        leftLabel="P1 → P2" leftColor="pink" leftActive={isP1Turn} leftGuesses={p1G}
+        rightLabel="P2 → P1" rightColor="cyan" rightActive={isP2Turn} rightGuesses={p2G}
+        digits={digits}
+      />
+
+      {!winner && (
+        <>
+          <div className={`text-center mb-2 text-sm font-bold anim-turn-pulse ${isP1Turn ? 'text-pink-400' : 'text-cyan-400'}`}>
+            {isP1Turn ? '🎯 P1 のターン' : '🎯 P2 のターン'}
+          </div>
+          <div className="bg-zinc-900/60 border border-zinc-800 rounded-2xl p-3 mb-3">
+            <DigitSlots value={input} digits={digits} complete={valid} />
+          </div>
+          <NumberPad value={input} onChange={setInput} digits={digits} eliminated={currentEliminated} />
+          <Btn onClick={submit} disabled={!valid} size="lg" variant={isP1Turn ? 'primary' : 'accent'} className="w-full mt-4" haptic={50}>
+            🎯 予想を送る
+          </Btn>
+        </>
+      )}
+    </div>
+  );
+}
+
+// Shared two-board layout
+function GameBoards({ leftLabel, leftColor, leftActive, leftGuesses, rightLabel, rightColor, rightActive, rightGuesses, digits }) {
+  const colorClass = (c, active) => {
+    if (c === 'pink') return active ? 'border-pink-500/70 shadow-lg shadow-pink-500/20 anim-pulse-pink' : 'border-pink-500/30';
+    return active ? 'border-cyan-500/70 shadow-lg shadow-cyan-500/20 anim-pulse-cyan' : 'border-cyan-500/30';
+  };
+  const textColor = (c) => (c === 'pink' ? 'text-pink-400' : 'text-cyan-400');
+
+  return (
+    <div className="grid grid-cols-2 gap-3 mb-4">
+      <div className={`bg-zinc-900/60 border rounded-2xl p-3 transition-all ${colorClass(leftColor, leftActive)}`}>
+        <div className={`text-xs font-bold mb-2 tracking-wider ${textColor(leftColor)}`}>{leftLabel}</div>
+        <div className="space-y-1.5">
+          {leftGuesses.length === 0 && <div className="text-zinc-600 text-xs italic">まだなし</div>}
+          {leftGuesses.map((g, i) => (
+            <GuessRow key={i} guess={g.value} fb={g.fb} num={i + 1} isWin={g.fb && g.fb.s === digits} isLatest={i === leftGuesses.length - 1} />
+          ))}
+        </div>
+      </div>
+      <div className={`bg-zinc-900/60 border rounded-2xl p-3 transition-all ${colorClass(rightColor, rightActive)}`}>
+        <div className={`text-xs font-bold mb-2 tracking-wider ${textColor(rightColor)}`}>{rightLabel}</div>
+        <div className="space-y-1.5">
+          {rightGuesses.length === 0 && <div className="text-zinc-600 text-xs italic">まだなし</div>}
+          {rightGuesses.map((g, i) => (
+            <GuessRow key={i} guess={g.value} fb={g.fb} num={i + 1} isWin={g.fb && g.fb.s === digits} isLatest={i === rightGuesses.length - 1} />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ===== Remote =====
+
+function RemoteChoiceScreen({ onBack, onCreate, onJoin }) {
+  return (
+    <div>
+      <Header title="別の端末で対戦" subtitle="部屋を作るか、コードで参加" onBack={onBack} />
+      <div className="space-y-3 mt-4">
+        <button
+          onClick={() => { buzz(35); onCreate(); }}
+          className="w-full p-5 rounded-2xl bg-gradient-to-br from-yellow-500/20 to-orange-500/20 border border-yellow-500/40 active:scale-[0.97] active:shadow-lg active:shadow-yellow-500/30 transition-all text-left"
+        >
+          <div className="font-bold text-yellow-300 text-lg flex items-center gap-2">🏠 部屋を作る</div>
+          <div className="text-xs text-zinc-400 mt-1">設定して4文字のコードを発行</div>
+        </button>
+        <button
+          onClick={() => { buzz(35); onJoin(); }}
+          className="w-full p-5 rounded-2xl bg-gradient-to-br from-pink-500/20 to-rose-500/20 border border-pink-500/40 active:scale-[0.97] active:shadow-lg active:shadow-pink-500/30 transition-all text-left"
+        >
+          <div className="font-bold text-pink-300 text-lg flex items-center gap-2">🚪 コードで参加</div>
+          <div className="text-xs text-zinc-400 mt-1">相手から教えてもらった4文字を入力</div>
+        </button>
+      </div>
+      <div className="mt-6 bg-zinc-900/50 border border-zinc-800 rounded-xl p-3 text-xs text-zinc-400 leading-relaxed">
+        <span className="text-yellow-400 font-bold">ヒント: </span>
+        部屋を作った人が4文字のルームコードを相手に伝えてください（LINE、口頭などで）。相手はそのコードで参加できます。
+      </div>
+    </div>
+  );
+}
+
+function RemoteJoinScreen({ onBack, onSubmit, error, setError }) {
+  const [code, setCode] = useState('');
+  return (
+    <div>
+      <Header title="コードで参加" subtitle="4文字のルームコードを入力" onBack={onBack} />
+      <div className="bg-zinc-900/60 border border-zinc-800 rounded-2xl p-5 mb-4">
+        <input
+          type="text"
+          value={code}
+          onChange={(e) => { setCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, ROOM_LEN)); setError(''); }}
+          placeholder="A B C D"
+          className="w-full bg-transparent text-center text-4xl font-mono font-black tracking-[0.4em] text-white outline-none placeholder-zinc-700"
+          autoFocus
+        />
+      </div>
+      {error && <div className={`text-red-400 text-sm text-center mb-3 anim-shake`}>{error}</div>}
+      <Btn onClick={() => onSubmit(code)} disabled={code.length !== ROOM_LEN} size="lg" variant="primary" className="w-full" haptic={40}>
+        参加する →
+      </Btn>
+    </div>
+  );
+}
+
+function RemoteWaitingJoinScreen({ roomCode, joined, copied, setCopied, digits, maxTurns, onCancel, onContinue }) {
+  useEffect(() => {
+    if (joined) {
+      buzz([50, 50, 50, 50, 100]);
+      const t = setTimeout(onContinue, 800);
+      return () => clearTimeout(t);
+    }
+  }, [joined]);
+
+  function copy() {
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(roomCode);
+      setCopied(true); buzz(30);
+      setTimeout(() => setCopied(false), 1500);
+    }
+  }
+
+  return (
+    <div>
+      <Header title="ルーム作成完了 🎉" subtitle="相手に下のコードを伝えてください" onBack={onCancel} />
+      <div className="bg-gradient-to-br from-yellow-500/30 via-orange-500/30 to-pink-500/30 border-2 border-yellow-400/50 rounded-2xl p-6 my-6 text-center shadow-2xl shadow-orange-500/20 anim-pulse-pink">
+        <div className="text-xs text-yellow-300 font-bold tracking-[0.3em] mb-3">★ ROOM CODE ★</div>
+        <div className="text-6xl font-mono font-black tracking-[0.3em] text-white mb-4 drop-shadow-[0_0_15px_rgba(255,200,0,0.7)]" style={{ fontFamily: "'DotGothic16', monospace" }}>
+          {roomCode}
+        </div>
+        <button onClick={copy} className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-zinc-800/80 text-zinc-200 text-xs font-bold active:bg-zinc-700 active:scale-90 transition-all">
+          {copied ? <><Check size={14} className="text-green-400" /> コピー済み</> : <><Copy size={14} /> コードをコピー</>}
+        </button>
+      </div>
+      <div className="text-center text-sm text-zinc-400 mb-3">
+        {joined ? <span className="text-green-400 font-bold anim-wiggle inline-block">✨ 相手が参加しました！</span> : <span className="animate-pulse">相手の参加を待っています…</span>}
+      </div>
+      <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-3 text-xs text-zinc-400">
+        設定: <span className="text-white font-bold">{digits}桁</span> / ターン: <span className="text-white font-bold">{maxTurns === 0 ? '無制限' : `${maxTurns}回`}</span>
+      </div>
+    </div>
+  );
+}
+
+function RemoteGameScreen({ roomCode, role, mySecret, state, input, setInput, onBack, onEnd, onStrike }) {
+  const { digits, maxTurns, turns, winner, p1Ready, p2Ready } = state;
+  const oppRole = role === 'p1' ? 'p2' : 'p1';
+  const oppReady = oppRole === 'p1' ? p1Ready : p2Ready;
+  const lastTurn = turns[turns.length - 1] || {};
+  const myGuessed = !!lastTurn[role + 'Guess'];
+
+  const canSubmit = !winner && oppReady && !myGuessed && (
+    role === 'p1' ? !lastTurn.p1Guess : !!lastTurn.p1Guess && !lastTurn.p2Guess
+  );
+  const valid = isValidNum(input, digits);
+
+  // Track latest feedback to trigger strike
+  const lastStrikeRef = useRef('');
+  useEffect(() => {
+    const myG = turns.filter(t => t[role + 'Guess']);
+    const last = myG[myG.length - 1];
+    if (last && last[role + 'Feedback'] && last[role + 'Feedback'].s === digits) {
+      const key = `${turns.length}-${last[role + 'Guess']}`;
+      if (lastStrikeRef.current !== key) {
+        lastStrikeRef.current = key;
+        onStrike();
+      }
+    }
+  }, [turns, role, digits]);
+
+  useEffect(() => {
+    if (winner) {
+      const t = setTimeout(onEnd, 1800);
+      return () => clearTimeout(t);
+    }
+  }, [winner]);
+
+  async function submitGuess() {
+    if (!valid || !canSubmit) return;
+    const cur = await storageGet(STORAGE_PREFIX + roomCode);
+    if (!cur) return;
+    const newTurns = [...cur.turns];
+    const idx = newTurns.length - 1;
+    newTurns[idx] = { ...newTurns[idx], [role + 'Guess']: input };
+    const updated = { ...cur, turns: newTurns, ts: Date.now() };
+    await storageSet(STORAGE_PREFIX + roomCode, updated);
+    setInput('');
+  }
+
+  const myG = turns.filter(t => t[role + 'Guess']).map(t => ({ value: t[role + 'Guess'], fb: t[role + 'Feedback'] }));
+  const oppG = turns.filter(t => t[oppRole + 'Guess']).map(t => ({ value: t[oppRole + 'Guess'], fb: t[oppRole + 'Feedback'] }));
+  const myEliminated = useMemo(() => computeEliminated(myG), [turns, role]);
+
+  let waitMsg = '';
+  if (!oppReady) waitMsg = '相手が数字を決めるのを待っています…';
+  else if (myGuessed && !lastTurn[oppRole + 'Guess']) waitMsg = '相手の予想を待っています…';
+  else if (role === 'p2' && !lastTurn.p1Guess) waitMsg = 'P1 の予想を待っています…';
+
+  return (
+    <div>
+      <Header
+        title={`ターン ${turns.length}${maxTurns > 0 ? ` / ${maxTurns}` : ''}`}
+        subtitle={`オンライン対戦 - あなたは ${role.toUpperCase()}`}
+        onBack={onBack}
+      />
+
+      <div className="text-center mb-3 text-xs text-zinc-500">
+        ROOM <span className="font-mono font-bold text-zinc-300 tracking-wider">{roomCode}</span>
+      </div>
+
+      <GameBoards
+        leftLabel="YOU → 相手" leftColor="pink" leftActive={canSubmit} leftGuesses={myG}
+        rightLabel="相手 → YOU" rightColor="cyan" rightActive={oppReady && !canSubmit && !myGuessed} rightGuesses={oppG}
+        digits={digits}
+      />
+
+      {!winner && (
+        <>
+          {canSubmit ? (
+            <>
+              <div className="text-center mb-2 text-sm font-bold text-pink-400 anim-turn-pulse">🎯 あなたのターン</div>
+              <div className="bg-zinc-900/60 border border-zinc-800 rounded-2xl p-3 mb-3">
+                <DigitSlots value={input} digits={digits} complete={valid} />
+              </div>
+              <NumberPad value={input} onChange={setInput} digits={digits} eliminated={myEliminated} />
+              <Btn onClick={submitGuess} disabled={!valid} size="lg" variant="primary" className="w-full mt-4" haptic={50}>
+                🎯 予想を送る
+              </Btn>
+            </>
+          ) : (
+            <div className="flex items-center justify-center gap-2 text-zinc-400 text-sm py-8">
+              <RefreshCw size={14} className="animate-spin" />
+              {waitMsg}
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+// ===== End Screen =====
+
+function EndScreen({ mode, game, role, mySecret, onBackToTitle }) {
+  if (!game) return <div className="text-center py-12">読み込み中…</div>;
+
+  const { digits, turns, winner, p1Secret, p2Secret } = game;
+
+  let titleText, subtitleText, color, isWin = false, emoji;
+  if (mode === 'cpu') {
+    if (winner === 'p1') { titleText = 'WIN!'; subtitleText = 'CPU に勝った！'; color = 'from-pink-400 via-yellow-300 to-orange-400'; isWin = true; emoji = '🏆'; }
+    else if (winner === 'p2') { titleText = 'LOSE'; subtitleText = 'CPU の勝ち'; color = 'from-zinc-400 to-zinc-500'; emoji = '😢'; }
+    else { titleText = 'DRAW'; subtitleText = '引き分け'; color = 'from-cyan-400 to-blue-400'; emoji = '🤝'; }
+  } else if (mode === 'local') {
+    if (winner === 'p1') { titleText = 'P1 WIN!'; subtitleText = 'プレイヤー1の勝利！'; color = 'from-pink-400 via-rose-400 to-yellow-300'; isWin = true; emoji = '🏆'; }
+    else if (winner === 'p2') { titleText = 'P2 WIN!'; subtitleText = 'プレイヤー2の勝利！'; color = 'from-cyan-400 via-blue-400 to-purple-400'; isWin = true; emoji = '🏆'; }
+    else { titleText = 'DRAW'; subtitleText = '引き分け'; color = 'from-yellow-400 to-orange-400'; emoji = '🤝'; }
+  } else {
+    if (winner === 'draw') { titleText = 'DRAW'; subtitleText = '引き分け'; color = 'from-yellow-400 to-orange-400'; emoji = '🤝'; }
+    else if (winner === role) { titleText = 'WIN!'; subtitleText = 'あなたの勝ち！'; color = 'from-pink-400 via-yellow-300 to-orange-400'; isWin = true; emoji = '🏆'; }
+    else { titleText = 'LOSE'; subtitleText = '相手の勝ち'; color = 'from-zinc-400 to-zinc-500'; emoji = '😢'; }
+  }
+
+  // Vibrate on entrance
+  useEffect(() => {
+    if (isWin) buzz([100, 60, 100, 60, 200, 80, 300]);
+    else if (winner === 'draw') buzz([60, 60, 60]);
+    else buzz([200, 100, 100]);
+  }, []);
+
+  let p1S, p2S;
+  if (mode === 'cpu' || mode === 'local') { p1S = p1Secret; p2S = p2Secret; }
+  else {
+    p1S = role === 'p1' ? mySecret : '????';
+    p2S = role === 'p2' ? mySecret : '????';
+  }
+
+  return (
+    <div className="flex flex-col items-center pt-4 relative">
+      {isWin && <Confetti count={120} />}
+
+      <div className="text-center mb-6">
+        <div className="text-xs font-bold text-zinc-500 tracking-[0.3em] mb-2 anim-guess-in">RESULT</div>
+        <div className={`text-7xl mb-3 ${isWin ? 'anim-win-text' : 'anim-guess-in'}`}>{emoji}</div>
+        <h1
+          className={`text-7xl font-black mb-2 bg-gradient-to-br ${color} bg-clip-text text-transparent anim-win-text leading-none`}
+          style={{ fontFamily: "'DotGothic16', monospace", filter: isWin ? 'drop-shadow(0 0 20px rgba(255,180,0,0.5))' : 'none' }}
+        >
+          {titleText}
+        </h1>
+        <p className="text-zinc-300 mt-2">{subtitleText}</p>
+      </div>
+
+      <div className="w-full bg-zinc-900/60 border border-zinc-800 rounded-2xl p-4 mb-4 anim-guess-in">
+        <div className="text-xs font-bold text-zinc-400 mb-3 tracking-wider">秘密の数字</div>
+        <div className="space-y-2">
+          <div className="flex items-center justify-between bg-zinc-950 rounded-lg p-3 border border-pink-500/20">
+            <span className="text-pink-400 font-bold">{mode === 'cpu' ? 'YOU' : 'P1'}</span>
+            <span className="font-mono text-2xl font-black tracking-wider">{p1S}</span>
+          </div>
+          <div className="flex items-center justify-between bg-zinc-950 rounded-lg p-3 border border-cyan-500/20">
+            <span className="text-cyan-400 font-bold">{mode === 'cpu' ? 'CPU' : 'P2'}</span>
+            <span className="font-mono text-2xl font-black tracking-wider">{p2S}</span>
+          </div>
+        </div>
+      </div>
+
+      <div className="w-full bg-zinc-900/60 border border-zinc-800 rounded-2xl p-4 mb-6 anim-guess-in">
+        <div className="text-xs font-bold text-zinc-400 mb-3 tracking-wider">プレイ履歴 ({turns.length} ターン)</div>
+        <div className="space-y-1 max-h-60 overflow-y-auto">
+          {turns.map((t, i) => (
+            <div key={i} className="flex items-center gap-2 text-xs">
+              <span className="text-zinc-600 w-5">{i + 1}.</span>
+              <span className="font-mono text-pink-400 w-10">{t.p1Guess || '—'}</span>
+              <span className="text-zinc-600 text-[10px]"><FB fb={t.p1Feedback} /></span>
+              <span className="text-zinc-700">/</span>
+              <span className="font-mono text-cyan-400 w-10">{t.p2Guess || '—'}</span>
+              <span className="text-zinc-600 text-[10px]"><FB fb={t.p2Feedback} /></span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <Btn onClick={onBackToTitle} size="lg" variant={isWin ? 'win' : 'primary'} className="w-full" haptic={50}>
+        🏠 タイトルへ戻る
+      </Btn>
+    </div>
+  );
+}
+
+
+const { createRoot } = ReactDOM;
+createRoot(document.getElementById('root')).render(<App />);
+
+  </script>
+
+  <script>
+    // Hide loader once React renders
+    const hideLoader = () => { const l = document.getElementById('loader'); if (l) l.style.display = 'none'; };
+    setTimeout(hideLoader, 100);
+    setTimeout(hideLoader, 1500);
+  </script>
+</body>
+</html>
